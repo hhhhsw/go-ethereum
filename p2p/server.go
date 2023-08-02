@@ -107,6 +107,7 @@ type Config struct {
 
 	// Static nodes are used as pre-configured connections which are always
 	// maintained and re-connected on disconnects.
+	// 静态节点 提前配置的节点 会自动重连
 	StaticNodes []*enode.Node
 
 	// Trusted nodes are used as pre-configured connections which are always
@@ -223,6 +224,7 @@ const (
 // during the two handshakes.
 type conn struct {
 	fd net.Conn
+	// 默认为rlpxTransport
 	transport
 	node  *enode.Node
 	flags connFlag
@@ -436,6 +438,7 @@ func (s *sharedUDPConn) Close() error {
 
 // Start starts running the server.
 // Servers can not be re-used after stopping.
+// 启动一个p2p节点
 func (srv *Server) Start() (err error) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
@@ -481,9 +484,11 @@ func (srv *Server) Start() (err error) {
 			return err
 		}
 	}
+	// 发现节点
 	if err := srv.setupDiscovery(); err != nil {
 		return err
 	}
+	// 拨号任务 尝试连接发现的节点
 	srv.setupDialScheduler()
 
 	srv.loopWG.Add(1)
@@ -540,7 +545,9 @@ func (srv *Server) setupDiscovery() error {
 
 	// Add protocol-specific discovery sources.
 	added := make(map[string]bool)
+	// 服务支持的协议
 	for _, proto := range srv.Protocols {
+		// 协议候选人加入待拨号列表
 		if proto.DialCandidates != nil && !added[proto.Name] {
 			srv.discmix.AddSource(proto.DialCandidates)
 			added[proto.Name] = true
@@ -574,6 +581,8 @@ func (srv *Server) setupDiscovery() error {
 		if !realaddr.IP.IsLoopback() {
 			srv.loopWG.Add(1)
 			go func() {
+				// srv.NAT 默认为 nat.Any: discoverPMP / discoverUPnP 都可
+				// 直到srv.quit chan退出  add 端口映射
 				nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
 				srv.loopWG.Done()
 			}()
@@ -592,9 +601,10 @@ func (srv *Server) setupDiscovery() error {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
 			NetRestrict: srv.NetRestrict,
-			Bootnodes:   srv.BootstrapNodes,
-			Unhandled:   unhandled,
-			Log:         srv.log,
+			// 初始化节点
+			Bootnodes: srv.BootstrapNodes,
+			Unhandled: unhandled,
+			Log:       srv.log,
 		}
 		ntab, err := discover.ListenV4(conn, srv.localnode, cfg)
 		if err != nil {
@@ -613,7 +623,7 @@ func (srv *Server) setupDiscovery() error {
 			Log:         srv.log,
 		}
 		var err error
-		if sconn != nil {
+		if sconn == nil {
 			srv.DiscV5, err = discover.ListenV5(sconn, srv.localnode, cfg)
 		} else {
 			srv.DiscV5, err = discover.ListenV5(conn, srv.localnode, cfg)
@@ -626,6 +636,7 @@ func (srv *Server) setupDiscovery() error {
 }
 
 func (srv *Server) setupDialScheduler() {
+	// init dial config
 	config := dialConfig{
 		self:           srv.localnode.ID(),
 		maxDialPeers:   srv.maxDialedConns(),
@@ -745,6 +756,7 @@ running:
 				p.rw.set(trustedConn, false)
 			}
 
+			// function to operate peers
 		case op := <-srv.peerOp:
 			// This channel is used by Peers and PeerCount.
 			op(peers)
@@ -929,6 +941,9 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 // SetupConn runs the handshakes and attempts to add the connection
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
+// 设置连接
+// 执行两次handShakes
+// 通过 srv.CheckPoint 进入检查点
 func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
 	c := &conn{fd: fd, flags: flags, cont: make(chan error)}
 	if dialDest == nil {
@@ -963,7 +978,9 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		}
 	}
 
+	// https://stackoverflow.com/questions/49029311/what-is-the-use-of-ethereums-rlpx-and-how-do-they-use-it-in-ethereum-ecosystem
 	// Run the RLPx handshake.
+	// 第一次握手  尝试RLPx 协议握手 交换密钥 初始化rlpxTransport的session信息
 	remotePubkey, err := c.doEncHandshake(srv.PrivateKey)
 	if err != nil {
 		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
@@ -975,6 +992,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		c.node = nodeFromConn(remotePubkey, c.fd)
 	}
 	clog := srv.log.New("id", c.node.ID(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
+	// 检查点
 	err = srv.checkpoint(c, srv.checkpointPostHandshake)
 	if err != nil {
 		clog.Trace("Rejected peer", "err", err)
@@ -982,6 +1000,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	}
 
 	// Run the capability negotiation handshake.
+	// 第二次握手  交换支持的devp2p子协议
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 	if err != nil {
 		clog.Trace("Failed p2p handshake", "err", err)
@@ -992,6 +1011,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		return DiscUnexpectedIdentity
 	}
 	c.caps, c.name = phs.Caps, phs.Name
+	// 检查点
 	err = srv.checkpoint(c, srv.checkpointAddPeer)
 	if err != nil {
 		clog.Trace("Rejected peer", "err", err)

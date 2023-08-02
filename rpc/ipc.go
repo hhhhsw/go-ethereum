@@ -25,6 +25,7 @@ import (
 )
 
 // ServeListener accepts connections on l, serving JSON-RPC on them.
+// 启动一个监听者
 func (s *Server) ServeListener(l net.Listener) error {
 	for {
 		conn, err := l.Accept()
@@ -35,6 +36,7 @@ func (s *Server) ServeListener(l net.Listener) error {
 			return err
 		}
 		log.Trace("Accepted RPC connection", "conn", conn.RemoteAddr())
+		// start codec
 		go s.ServeCodec(NewCodec(conn), 0)
 	}
 }

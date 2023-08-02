@@ -229,6 +229,7 @@ func (tab *Table) loop() {
 	defer copyNodes.Stop()
 
 	// Start initial refresh.
+	// doRefresh 真正的节点刷新
 	go tab.doRefresh(refreshDone)
 
 loop:
@@ -251,6 +252,7 @@ loop:
 				close(ch)
 			}
 			waiting, refreshDone = nil, nil
+			// 验证
 		case <-revalidate.C:
 			revalidateDone = make(chan struct{})
 			go tab.doRevalidate(revalidateDone)
@@ -284,9 +286,11 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	// Load nodes from the database and insert
 	// them. This should yield a few previously seen nodes that are
 	// (hopefully) still alive.
+	// 从db、苗圃节点中获取有希望存活的节点
 	tab.loadSeedNodes()
 
 	// Run self lookup to discover new neighbor nodes.
+	// 根据自身节点寻找节点 加入tab.buckets.entries
 	tab.net.lookupSelf()
 
 	// The Kademlia paper specifies that the bucket refresh should
@@ -296,12 +300,14 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	// sha3 preimage that falls into a chosen bucket.
 	// We perform a few lookups with a random target instead.
 	for i := 0; i < 3; i++ {
+		// 根据随机节点寻找节点 加入tab.buckets.entries
 		tab.net.lookupRandom()
 	}
 }
 
 func (tab *Table) loadSeedNodes() {
 	seeds := wrapNodes(tab.db.QuerySeeds(seedCount, seedMaxAge))
+	// 加入苗圃节点
 	seeds = append(seeds, tab.nursery...)
 	for i := range seeds {
 		seed := seeds[i]
@@ -316,6 +322,7 @@ func (tab *Table) loadSeedNodes() {
 func (tab *Table) doRevalidate(done chan<- struct{}) {
 	defer func() { done <- struct{}{} }()
 
+	// 随机buckets中找到最久未验证的节点
 	last, bi := tab.nodeToRevalidate()
 	if last == nil {
 		// No non-empty bucket found.
@@ -339,6 +346,7 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	defer tab.mutex.Unlock()
 	b := tab.buckets[bi]
 	if err == nil {
+		// 验证成功 成为最新的验证节点
 		// The node responded, move it to the front.
 		last.livenessChecks++
 		tab.log.Debug("Revalidated node", "b", bi, "id", last.ID(), "checks", last.livenessChecks)
@@ -347,6 +355,7 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	}
 	// No reply received, pick a replacement or delete the node if there aren't
 	// any replacements.
+	// 没感应上 从备胎中找一个把它替了
 	if r := tab.replace(b, last); r != nil {
 		tab.log.Debug("Replaced dead node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks, "r", r.ID(), "rip", r.IP())
 	} else {
@@ -399,6 +408,7 @@ func (tab *Table) copyLiveNodes() {
 // preferLive is true and the table contains any verified nodes, the result will not
 // contain unverified nodes. However, if there are no verified nodes at all, the result
 // will contain unverified nodes.
+// 发现的节点按照和target距离由近到远排序
 func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *nodesByDistance {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
@@ -410,7 +420,9 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 	liveNodes := &nodesByDistance{target: target}
 	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
+			// 所有node
 			nodes.push(n, nresults)
+			// 确认存活的node
 			if preferLive && n.livenessChecks > 0 {
 				liveNodes.push(n, nresults)
 			}
@@ -467,11 +479,13 @@ func (tab *Table) addSeenNode(n *node) {
 
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
+	// 根据node hash获取对应的桶index
 	b := tab.bucket(n.ID())
 	if contains(b.entries, n.ID()) {
 		// Already in bucket, don't add.
 		return
 	}
+	// entries 满了 加入备选队列
 	if len(b.entries) >= bucketSize {
 		// Bucket full, maybe add as replacement.
 		tab.addReplacement(b, n)
@@ -482,9 +496,12 @@ func (tab *Table) addSeenNode(n *node) {
 		return
 	}
 	// Add to end of bucket:
+	// 把节点加入桶中
 	b.entries = append(b.entries, n)
+	// 从备选队列中剔除
 	b.replacements = deleteNode(b.replacements, n)
 	n.addedAt = time.Now()
+	// hook 方法调用
 	if tab.nodeAddedHook != nil {
 		tab.nodeAddedHook(n)
 	}

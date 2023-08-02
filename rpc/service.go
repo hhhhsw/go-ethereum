@@ -57,6 +57,7 @@ type callback struct {
 	isSubscribe bool           // true if this is a subscription callback
 }
 
+// 组装订阅interface的method为map
 func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 	rcvrVal := reflect.ValueOf(rcvr)
 	if name == "" {
@@ -109,6 +110,7 @@ func (r *serviceRegistry) subscription(service, name string) *callback {
 	return r.services[service].subscriptions[name]
 }
 
+// 筛选出每个export method 并获取符合格式（校验入参、出参）的方法类型新增为callback
 // suitableCallbacks iterates over the methods of the given type. It determines if a method
 // satisfies the criteria for a RPC callback or a subscription callback and adds it to the
 // collection of callbacks. See server documentation for a summary of these criteria.
@@ -117,6 +119,7 @@ func suitableCallbacks(receiver reflect.Value) map[string]*callback {
 	callbacks := make(map[string]*callback)
 	for m := 0; m < typ.NumMethod(); m++ {
 		method := typ.Method(m)
+		// PkgPath == "" 代表方法为exported方法（大写）
 		if method.PkgPath != "" {
 			continue // method not exported
 		}
@@ -144,10 +147,12 @@ func newCallback(receiver, fn reflect.Value) *callback {
 	for i := 0; i < fntype.NumOut(); i++ {
 		outs[i] = fntype.Out(i)
 	}
+	// 参数最多2个
 	if len(outs) > 2 {
 		return nil
 	}
 	// If an error is returned, it must be the last returned value.
+	// 若返回参数有error 必须为最后一个参数
 	switch {
 	case len(outs) == 1 && isErrorType(outs[0]):
 		c.errPos = 0
@@ -168,6 +173,7 @@ func (c *callback) makeArgTypes() {
 	if c.rcvr.IsValid() {
 		firstArg++
 	}
+	// 是否有context.Context参数
 	if fntype.NumIn() > firstArg && fntype.In(firstArg) == contextType {
 		c.hasCtx = true
 		firstArg++
@@ -239,6 +245,7 @@ func isPubSub(methodType reflect.Type) bool {
 		isErrorType(methodType.Out(1))
 }
 
+// 名称首字母转为小写
 // formatName converts to first character of name to lowercase.
 func formatName(name string) string {
 	ret := []rune(name)

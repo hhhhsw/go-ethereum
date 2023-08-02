@@ -217,6 +217,7 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 }
 
 // NewHeads send a notification each time a new (header) block is appended to the chain.
+// subscribe 订阅新块高头
 func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {

@@ -19,6 +19,7 @@ package rpc_test
 import (
 	"context"
 	"fmt"
+	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -38,9 +39,13 @@ type Block struct {
 	Number *hexutil.Big
 }
 
+func TestSub(t *testing.T) {
+	ExampleClientSubscription()
+}
+
 func ExampleClientSubscription() {
 	// Connect the client.
-	client, _ := rpc.Dial("ws://127.0.0.1:8545")
+	client, _ := rpc.Dial("wss://goerli.infura.io/ws/v3/b03e50a2a75f4c14b5d796c1028cd4a8")
 	subch := make(chan Block)
 
 	// Ensure that subch receives the latest block.

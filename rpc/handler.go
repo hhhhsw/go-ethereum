@@ -231,6 +231,7 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 	if ok := h.handleImmediate(msg); ok {
 		return
 	}
+	// 调用callback 执行具体方法（subscribe会走到这里）
 	h.startCallProc(func(cp *callProc) {
 		var (
 			responded sync.Once
@@ -439,6 +440,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 
 // handleCall processes method calls.
 func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
+	// 处理subscribe请求
 	if msg.isSubscribe() {
 		return h.handleSubscribe(cp, msg)
 	}
@@ -482,6 +484,7 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	}
 
 	// Subscription method name is first argument.
+	// 获取订阅参数
 	name, err := parseSubscriptionName(msg.Params)
 	if err != nil {
 		return msg.errorResponse(&invalidParamsError{err.Error()})
@@ -503,12 +506,14 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	// Install notifier in context so the subscription handler can find it.
 	n := &Notifier{h: h, namespace: namespace}
 	cp.notifiers = append(cp.notifiers, n)
+	// 通过 context 传递Notifier参数
 	ctx := context.WithValue(cp.ctx, notifierKey{}, n)
 
 	return h.runMethod(ctx, msg, callb, args)
 }
 
 // runMethod runs the Go callback for an RPC method.
+// 执行callback方法
 func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {

@@ -176,6 +176,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
 
 	// Configure GraphQL if requested.
+	// 是否打开graphql
 	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
 		utils.RegisterGraphQLService(stack, backend, filterSystem, &cfg.Node)
 	}

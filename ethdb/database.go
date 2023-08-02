@@ -19,6 +19,10 @@ package ethdb
 
 import "io"
 
+// leveldb为主要db 使用开源的goleveldb 为kv结构的数据库
+// memorydb基本为map + lock
+// remotedb远程db
+
 // KeyValueReader wraps the Has and Get method of a backing data store.
 type KeyValueReader interface {
 	// Has retrieves if a key is present in the key-value data store.
@@ -179,6 +183,7 @@ type AncientStore interface {
 
 // Database contains all the methods required by the high level database to not
 // only access the key-value data store but also the chain freezer.
+// 数据库所有接口
 type Database interface {
 	Reader
 	Writer

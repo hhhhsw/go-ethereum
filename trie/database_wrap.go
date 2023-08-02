@@ -235,6 +235,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 // trie root), all internal trie nodes are referenced together by database itself.
 //
 // It's only supported by hash-based database and will return an error for others.
+// 将缓存从dirties中转移到cleans中 cleans会统一刷盘
 func (db *Database) Reference(root common.Hash, parent common.Hash) error {
 	hdb, ok := db.backend.(*hashdb.Database)
 	if !ok {

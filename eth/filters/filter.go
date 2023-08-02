@@ -95,6 +95,7 @@ func newFilter(sys *FilterSystem, addresses []common.Address, topics [][]common.
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
+	// 指定块高数据过滤
 	// If we're doing singleton block filtering, execute and return
 	if f.block != nil {
 		header, err := f.sys.backend.HeaderByHash(ctx, *f.block)
@@ -159,6 +160,8 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		end            = uint64(f.end)
 		size, sections = f.sys.backend.BloomStatus()
 	)
+	// 除了区块头的bloomFilter之外 单独维护了一个索引 避免范围查询时候的多次随机io 这个索引4096块一个section
+	// 过滤分成两个部分 已经索引到section中的过滤器 和访问区块头的过滤器
 	if indexed := sections * size; indexed > uint64(f.begin) {
 		if indexed > end {
 			logs, err = f.indexedLogs(ctx, end)
@@ -169,6 +172,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 			return logs, err
 		}
 	}
+	// 未索引
 	rest, err := f.unindexedLogs(ctx, end)
 	logs = append(logs, rest...)
 	if pending {
@@ -364,6 +368,7 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 				break
 			}
 		}
+		// 一个地址都没filter到 返回false
 		if !included {
 			return false
 		}
@@ -377,6 +382,7 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 				break
 			}
 		}
+		// 一个topic都没filter到 返回false
 		if !included {
 			return false
 		}

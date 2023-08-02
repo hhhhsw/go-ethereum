@@ -160,6 +160,7 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 	for _, scheduler := range m.schedulers {
 		scheduler.reset()
 	}
+	// begin, end, buffer, session
 	sink := m.run(begin, end, cap(results), session)
 
 	// Read the output from the result sink and deliver to the user

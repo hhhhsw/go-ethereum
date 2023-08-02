@@ -87,6 +87,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// graphql 执行 业务逻辑在graphql.go
 	response := h.Schema.Exec(ctx, params.Query, params.OperationName, params.Variables)
 	timer.Stop()
 	responded.Do(func() {
@@ -112,8 +113,10 @@ func New(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterS
 // newHandler returns a new `http.Handler` that will answer GraphQL queries.
 // It additionally exports an interactive query browser on the / endpoint.
 func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterSystem, cors, vhosts []string) (*handler, error) {
+	// 初始化resolver
 	q := Resolver{backend, filterSystem}
 
+	// graphql.schema 提供 query 和 mutation
 	s, err := graphql.ParseSchema(schema, &q)
 	if err != nil {
 		return nil, err
@@ -121,6 +124,8 @@ func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.
 	h := handler{Schema: s}
 	handler := node.NewHTTPHandlerStack(h, cors, vhosts, nil)
 
+	// ui界面 graphiql.go
+	// default: http://localhost:8545/graphql/ui
 	stack.RegisterHandler("GraphQL UI", "/graphql/ui", GraphiQL{})
 	stack.RegisterHandler("GraphQL UI", "/graphql/ui/", GraphiQL{})
 	stack.RegisterHandler("GraphQL", "/graphql", handler)

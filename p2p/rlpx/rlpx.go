@@ -311,6 +311,7 @@ func (c *Conn) Handshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 初始化c.session
 	c.InitWithSecrets(sec)
 	c.session.rbuf = h.rbuf
 	c.session.wbuf = h.wbuf
@@ -470,6 +471,8 @@ func (h *handshakeState) handleAuthMsg(msg *authMsgV4, prv *ecdsa.PrivateKey) er
 
 // secrets is called after the handshake is completed.
 // It extracts the connection secrets from the handshake values.
+// auth 为握手发送信息  authResp为握手返回信息
+// 获取连接加密密码
 func (h *handshakeState) secrets(auth, authResp []byte) (Secrets, error) {
 	ecdheSecret, err := h.randomPrivKey.GenerateShared(h.remoteRandomPub, sskLen, sskLen)
 	if err != nil {
@@ -515,19 +518,23 @@ func (h *handshakeState) runInitiator(conn io.ReadWriter, prv *ecdsa.PrivateKey,
 	h.initiator = true
 	h.remote = ecies.ImportECDSAPublic(remote)
 
+	// make 握手信息
 	authMsg, err := h.makeAuthMsg(prv)
 	if err != nil {
 		return s, err
 	}
+	// 加密握手信息
 	authPacket, err := h.sealEIP8(authMsg)
 	if err != nil {
 		return s, err
 	}
 
+	// 发送握手信息
 	if _, err = conn.Write(authPacket); err != nil {
 		return s, err
 	}
 
+	// 使用prv获取握手resp信息
 	authRespMsg := new(authRespV4)
 	authRespPacket, err := h.readMsg(authRespMsg, prv, conn)
 	if err != nil {
@@ -541,6 +548,7 @@ func (h *handshakeState) runInitiator(conn io.ReadWriter, prv *ecdsa.PrivateKey,
 }
 
 // makeAuthMsg creates the initiator handshake message.
+// 用私钥初始化握手信息
 func (h *handshakeState) makeAuthMsg(prv *ecdsa.PrivateKey) (*authMsgV4, error) {
 	// Generate random initiator nonce.
 	h.initNonce = make([]byte, shaLen)

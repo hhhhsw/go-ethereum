@@ -147,6 +147,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		return nil, err
 	}
 	t.tab = tab
+	// doRefresh 寻找节点 + doRevalidate 验证节点
 	go tab.loop()
 
 	t.wg.Add(2)
@@ -223,6 +224,7 @@ func (t *UDPv4) ping(n *enode.Node) (seq uint64, err error) {
 
 // sendPing sends a ping message to the given node and invokes the callback
 // when the reply arrives.
+// 发送ping信息 并等待pong
 func (t *UDPv4) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) *replyMatcher {
 	req := t.makePing(toaddr)
 	packet, hash, err := v4wire.Encode(t.priv, req)
@@ -296,6 +298,7 @@ func (t *UDPv4) newLookup(ctx context.Context, targetKey encPubkey) *lookup {
 	return it
 }
 
+// queryFunc
 // findnode sends a findnode request to the given node and waits until
 // the node has sent up to k neighbors.
 func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubkey) ([]*node, error) {
@@ -381,6 +384,7 @@ func (t *UDPv4) pending(id enode.ID, ip net.IP, ptype byte, callback replyMatchF
 	ch := make(chan error, 1)
 	p := &replyMatcher{from: id, ip: ip, ptype: ptype, callback: callback, errc: ch}
 	select {
+	// 新建replyMatcher 加入t.addReplyMatcher chan
 	case t.addReplyMatcher <- p:
 		// loop will handle it
 	case <-t.closeCtx.Done():
@@ -417,6 +421,7 @@ func (t *UDPv4) loop() {
 	<-timeout.C // ignore first timeout
 	defer timeout.Stop()
 
+	// 重置超时定时器
 	resetTimeout := func() {
 		if plist.Front() == nil || nextTimeout == plist.Front().Value {
 			return
@@ -443,16 +448,19 @@ func (t *UDPv4) loop() {
 		resetTimeout()
 
 		select {
+		// 关闭 向所有replyMatcher 发送关闭err
 		case <-t.closeCtx.Done():
 			for el := plist.Front(); el != nil; el = el.Next() {
 				el.Value.(*replyMatcher).errc <- errClosed
 			}
 			return
 
+			// 发送信息
 		case p := <-t.addReplyMatcher:
 			p.deadline = time.Now().Add(respTimeout)
 			plist.PushBack(p)
 
+			// 收到回执
 		case r := <-t.gotreply:
 			var matched bool // whether any replyMatcher considered the reply acceptable.
 			for el := plist.Front(); el != nil; el = el.Next() {
@@ -476,6 +484,7 @@ func (t *UDPv4) loop() {
 			nextTimeout = nil
 
 			// Notify and remove callbacks whose deadline is in the past.
+			// 所有到deadline的replyMatcher 发送超时err
 			for el := plist.Front(); el != nil; el = el.Next() {
 				p := el.Value.(*replyMatcher)
 				if now.After(p.deadline) || now.Equal(p.deadline) {
@@ -485,6 +494,7 @@ func (t *UDPv4) loop() {
 				}
 			}
 			// If we've accumulated too many timeouts, do an NTP time sync check
+			// 超时太多 时间同步检查
 			if contTimeouts > ntpFailureThreshold {
 				if time.Since(ntpWarnTime) >= ntpWarningCooldown {
 					ntpWarnTime = time.Now()
@@ -511,6 +521,7 @@ func (t *UDPv4) write(toaddr *net.UDPAddr, toid enode.ID, what string, packet []
 }
 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
+// 读取接收到的udp请求
 func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 	defer t.wg.Done()
 	if unhandled != nil {
@@ -519,6 +530,7 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 
 	buf := make([]byte, maxPacketSize)
 	for {
+		// 获取udp请求包
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
 		if netutil.IsTemporaryError(err) {
 			// Ignore temporary read errors.
@@ -531,6 +543,7 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 			}
 			return
 		}
+		// 处理udp请求包
 		if t.handlePacket(from, buf[:nbytes]) != nil && unhandled != nil {
 			select {
 			case unhandled <- ReadPacket{buf[:nbytes], from}:
@@ -541,17 +554,21 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 }
 
 func (t *UDPv4) handlePacket(from *net.UDPAddr, buf []byte) error {
+	// 解码数据包
 	rawpacket, fromKey, hash, err := v4wire.Decode(buf)
 	if err != nil {
 		t.log.Debug("Bad discv4 packet", "addr", from, "err", err)
 		return err
 	}
+	// 获取数据包
 	packet := t.wrapPacket(rawpacket)
 	fromID := fromKey.ID()
+	// preverify func
 	if err == nil && packet.preverify != nil {
 		err = packet.preverify(packet, from, fromID, fromKey)
 	}
 	t.log.Trace("<< "+packet.Name(), "id", fromID, "addr", from, "err", err)
+	// handle func
 	if err == nil && packet.handle != nil {
 		packet.handle(packet, from, fromID, hash)
 	}
@@ -567,6 +584,7 @@ func (t *UDPv4) checkBond(id enode.ID, ip net.IP) bool {
 // This ensures there is a valid endpoint proof on the remote end.
 func (t *UDPv4) ensureBond(toid enode.ID, toaddr *net.UDPAddr) {
 	tooOld := time.Since(t.db.LastPingReceived(toid, toaddr.IP)) > bondExpiration
+	// 距离上次ping太久 ｜｜ 超过失败次数
 	if tooOld || t.db.FindFails(toid, toaddr.IP) > maxFindnodeFailures {
 		rm := t.sendPing(toid, toaddr, nil)
 		<-rm.errc
@@ -704,6 +722,7 @@ func (t *UDPv4) verifyFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 	if v4wire.Expired(req.Expiration) {
 		return errExpired
 	}
+	// ping pong 在前 fondNode在后
 	if !t.checkBond(fromID, from.IP) {
 		// No endpoint proof pong exists, we don't process the packet. This prevents an
 		// attack vector where the discovery protocol could be used to amplify traffic in a
@@ -716,11 +735,14 @@ func (t *UDPv4) verifyFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 	return nil
 }
 
+// 处理findnode请求
 func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID enode.ID, mac []byte) {
 	req := h.Packet.(*v4wire.Findnode)
 
 	// Determine closest nodes.
+	// 目标节点
 	target := enode.ID(crypto.Keccak256Hash(req.Target[:]))
+	// 将本地所有存活节点排序返回
 	closest := t.tab.findnodeByID(target, bucketSize, true).entries
 
 	// Send neighbors in chunks with at most maxNeighbors per packet
@@ -731,6 +753,7 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 		if netutil.CheckRelayIP(from.IP, n.IP()) == nil {
 			p.Nodes = append(p.Nodes, nodeToRPC(n))
 		}
+		// 分批发送
 		if len(p.Nodes) == v4wire.MaxNeighbors {
 			t.send(from, fromID, &p)
 			p.Nodes = p.Nodes[:0]

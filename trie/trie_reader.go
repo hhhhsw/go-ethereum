@@ -47,6 +47,7 @@ type trieReader struct {
 
 // newTrieReader initializes the trie reader with the given node reader.
 func newTrieReader(stateRoot, owner common.Hash, db NodeReader) (*trieReader, error) {
+	//  read node from ethdb.Database
 	reader := db.Reader(stateRoot)
 	if reader == nil {
 		return nil, fmt.Errorf("state not found #%x", stateRoot)

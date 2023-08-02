@@ -322,6 +322,7 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 
+	// flag标识， metrics配置
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
 	defer stack.Close()

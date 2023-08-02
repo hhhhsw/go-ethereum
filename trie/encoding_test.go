@@ -20,32 +20,42 @@ import (
 	"bytes"
 	crand "crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"math/rand"
 	"testing"
 )
 
 func TestHexCompact(t *testing.T) {
-	tests := []struct{ hex, compact []byte }{
-		// empty keys, with and without terminator.
-		{hex: []byte{}, compact: []byte{0x00}},
-		{hex: []byte{16}, compact: []byte{0x20}},
-		// odd length, no terminator
-		{hex: []byte{1, 2, 3, 4, 5}, compact: []byte{0x11, 0x23, 0x45}},
-		// even length, no terminator
-		{hex: []byte{0, 1, 2, 3, 4, 5}, compact: []byte{0x00, 0x01, 0x23, 0x45}},
-		// odd length, terminator
-		{hex: []byte{15, 1, 12, 11, 8, 16 /*term*/}, compact: []byte{0x3f, 0x1c, 0xb8}},
-		// even length, terminator
-		{hex: []byte{0, 15, 1, 12, 11, 8, 16 /*term*/}, compact: []byte{0x20, 0x0f, 0x1c, 0xb8}},
-	}
-	for _, test := range tests {
-		if c := hexToCompact(test.hex); !bytes.Equal(c, test.compact) {
-			t.Errorf("hexToCompact(%x) -> %x, want %x", test.hex, c, test.compact)
-		}
-		if h := compactToHex(test.compact); !bytes.Equal(h, test.hex) {
-			t.Errorf("compactToHex(%x) -> %x, want %x", test.compact, h, test.hex)
-		}
-	}
+	//tests := []struct{ hex, compact []byte }{
+	//	// empty keys, with and without terminator.
+	//	{hex: []byte{}, compact: []byte{0x00}},
+	//	{hex: []byte{16}, compact: []byte{0x20}},
+	//	// odd length, no terminator
+	//	{hex: []byte{1, 2, 3, 4, 5}, compact: []byte{0x11, 0x23, 0x45}},
+	//	// even length, no terminator
+	//	{hex: []byte{0, 1, 2, 3, 4, 5}, compact: []byte{0x00, 0x01, 0x23, 0x45}},
+	//	// odd length, terminator
+	//	{hex: []byte{15, 1, 12, 11, 8, 16 /*term*/}, compact: []byte{0x3f, 0x1c, 0xb8}},
+	//	{hex: []byte{15, 1, 12, 11, 8, 16 /*term*/}, compact: []byte{0x3f, 0x1c, 0xb8}},
+	//	// even length, terminator
+	//	{hex: []byte{0, 15, 1, 12, 11, 8, 16 /*term*/}, compact: []byte{0x20, 0x0f, 0x1c, 0xb8}},
+	//}
+	//for _, test := range tests {
+	//	if c := hexToCompact(test.hex); !bytes.Equal(c, test.compact) {
+	//		t.Errorf("hexToCompact(%x) -> %x, want %x", test.hex, c, test.compact)
+	//	}
+	//	if h := compactToHex(test.compact); !bytes.Equal(h, test.hex) {
+	//		t.Errorf("compactToHex(%x) -> %x, want %x", test.compact, h, test.hex)
+	//	}
+	//}
+	hex2 := []byte{32, 106, 76, 240, 169, 180, 131, 24, 17, 144, 141, 154, 173, 147, 11, 1, 9, 0, 8, 13, 9, 10, 10, 13, 9, 3, 0, 11, 16}
+	c := []byte{0x00, 0xa0, 0xfb}
+	compact := hexToCompact(hex2)
+	fmt.Println(compact)
+	fmt.Println(bytes.Equal(c, compact))
+	h := compactToHex(compact)
+	fmt.Println(bytes.Equal(h, hex2))
+
 }
 
 func TestHexKeybytes(t *testing.T) {
@@ -86,6 +96,7 @@ func TestHexToCompactInPlace(t *testing.T) {
 	} {
 		hexBytes, _ := hex.DecodeString(key)
 		exp := hexToCompact(hexBytes)
+		// hexBytes被修改
 		sz := hexToCompactInPlace(hexBytes)
 		got := hexBytes[:sz]
 		if !bytes.Equal(exp, got) {

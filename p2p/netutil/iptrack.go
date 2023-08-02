@@ -120,8 +120,10 @@ func (it *IPTracker) gcStatements(now mclock.AbsTime) {
 }
 
 func (it *IPTracker) gcContact(now mclock.AbsTime) {
+	// 更新上一次gc时间
 	it.lastContactGC = now
 	cutoff := now.Add(-it.contactWindow)
+	// 做一次gc
 	for host, ct := range it.contact {
 		if ct < cutoff {
 			delete(it.contact, host)

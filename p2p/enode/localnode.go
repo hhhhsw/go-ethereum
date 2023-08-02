@@ -229,6 +229,7 @@ func (ln *LocalNode) UDPContact(toaddr *net.UDPAddr) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
+	// 在localNode的ipv4/ipv6追踪器中 新增接触节点的记录
 	ln.endpointForIP(toaddr.IP).track.AddContact(toaddr.String())
 	ln.updateEndpoints()
 }

@@ -136,9 +136,14 @@ func (t *rlpxTransport) doProtoHandshake(our *protoHandshake) (their *protoHands
 	// returning the handshake read error. If the remote side
 	// disconnects us early with a valid reason, we should return it
 	// as the error so it can be tracked elsewhere.
+	// 读和写同时发生 同步结束
+
+	// 写
 	werr := make(chan error, 1)
 	go func() { werr <- Send(t, handshakeMsg, our) }()
+	// 读
 	if their, err = readProtocolHandshake(t); err != nil {
+		// remote node发送错误的时候 保证写线程也结束
 		<-werr // make sure the write terminates too
 		return nil, err
 	}

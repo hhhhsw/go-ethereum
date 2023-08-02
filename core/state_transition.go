@@ -237,12 +237,15 @@ func (st *StateTransition) buyGas() error {
 	if have, want := st.state.GetBalance(st.msg.From), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
 	}
+	// gas pool 扣除可用 gas
 	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
 		return err
 	}
+	// 可用 gas = gasLimit
 	st.gasRemaining += st.msg.GasLimit
 
 	st.initialGas = st.msg.GasLimit
+	// 扣钱
 	st.state.SubBalance(st.msg.From, mgval)
 	return nil
 }
@@ -295,6 +298,7 @@ func (st *StateTransition) preCheck() error {
 			}
 		}
 	}
+	// 扣除 msg.from 的 gasLimit * gasPrice
 	return st.buyGas()
 }
 
@@ -339,6 +343,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
+	// 计算固有 gas 是否足够
 	gas, err := IntrinsicGas(msg.Data, msg.AccessList, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
@@ -349,6 +354,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.gasRemaining -= gas
 
 	// Check clause 6
+	// from 是否有充足 balance 支付 value
 	if msg.Value.Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From, msg.Value) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
 	}
@@ -372,6 +378,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
+		// call contract
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value)
 	}
 
@@ -382,6 +389,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// After EIP-3529: refunds are capped to gasUsed / 5
 		st.refundGas(params.RefundQuotientEIP3529)
 	}
+	// 计算给矿工的奖励
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
 		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
@@ -394,6 +402,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
+		// 支付矿工(coinbase)奖励
 		st.state.AddBalance(st.evm.Context.Coinbase, fee)
 	}
 

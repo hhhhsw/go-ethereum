@@ -178,6 +178,7 @@ func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupF
 	d.ctx, d.cancel = context.WithCancel(context.Background())
 	d.wg.Add(2)
 	go d.readNodes(it)
+	// main loop of dial
 	go d.loop(it)
 	return d
 }
@@ -229,30 +230,39 @@ func (d *dialScheduler) loop(it enode.Iterator) {
 loop:
 	for {
 		// Launch new dials if slots are available.
+		// 计算空闲slot数量
 		slots := d.freeDialSlots()
+		// 初始化static拨号节点
 		slots -= d.startStaticDials(slots)
 		if slots > 0 {
 			nodesCh = d.nodesIn
 		} else {
+			// 别进来了
 			nodesCh = nil
 		}
 		d.rearmHistoryTimer()
 		d.logStats()
 
+		// 消费任务
 		select {
 		case node := <-nodesCh:
+			// 检查节点
 			if err := d.checkDial(node); err != nil {
+				//  丢弃异常节点
 				d.log.Trace("Discarding dial candidate", "id", node.ID(), "ip", node.IP(), "reason", err)
 			} else {
+				// 成功节点进入 进入拨号
 				d.startDial(newDialTask(node, dynDialedConn))
 			}
 
+			// 拨号完成 更新staticPool
 		case task := <-d.doneCh:
 			id := task.dest.ID()
 			delete(d.dialing, id)
 			d.updateStaticPool(id)
 			d.doneSinceLastLog++
 
+			// peer新增 待深入
 		case c := <-d.addPeerCh:
 			if c.is(dynDialedConn) || c.is(staticDialedConn) {
 				d.dialPeers++
@@ -266,6 +276,7 @@ loop:
 			}
 			// TODO: cancel dials to connected peers
 
+			// peer移除 待深入
 		case c := <-d.remPeerCh:
 			if c.is(dynDialedConn) || c.is(staticDialedConn) {
 				d.dialPeers--
@@ -273,6 +284,7 @@ loop:
 			delete(d.peers, c.node.ID())
 			d.updateStaticPool(c.node.ID())
 
+			// 新增static node 初始化时执行
 		case node := <-d.addStaticCh:
 			id := node.ID()
 			_, exists := d.static[id]
@@ -286,6 +298,7 @@ loop:
 				d.addToStaticPool(task)
 			}
 
+			// 移除static node
 		case node := <-d.remStaticCh:
 			id := node.ID()
 			task := d.static[id]
@@ -293,6 +306,7 @@ loop:
 			if task != nil {
 				delete(d.static, id)
 				if task.staticPoolIndex >= 0 {
+					// staticPool中移除 并把end节点移动到当前节点 poolSize - 1
 					d.removeFromStaticPool(task.staticPoolIndex)
 				}
 			}
@@ -307,6 +321,7 @@ loop:
 	}
 
 	d.historyTimer.Stop()
+	// 拨号中的任务都会进入doneCh chan 清空doneCh 关闭所有拨号进程
 	for range d.dialing {
 		<-d.doneCh
 	}
@@ -387,6 +402,7 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 	if _, ok := d.peers[n.ID()]; ok {
 		return errAlreadyConnected
 	}
+	// 黑名单
 	if d.netRestrict != nil && !d.netRestrict.Contains(n.IP()) {
 		return errNetRestrict
 	}
@@ -441,7 +457,9 @@ func (d *dialScheduler) startDial(task *dialTask) {
 	hkey := string(task.dest.ID().Bytes())
 	d.history.add(hkey, d.clock.Now().Add(dialHistoryExpiration))
 	d.dialing[task.dest.ID()] = task
+	// 异步执行
 	go func() {
+		//
 		task.run(d)
 		d.doneCh <- task
 	}()
@@ -467,13 +485,16 @@ type dialError struct {
 }
 
 func (t *dialTask) run(d *dialScheduler) {
+	// todo read
 	if t.needResolve() && !t.resolve(d) {
 		return
 	}
 
+	// 执行拨号
 	err := t.dial(d, t.dest)
 	if err != nil {
 		// For static nodes, resolve one more time if dialing fails.
+		// static节点再来次机会
 		if _, ok := err.(*dialError); ok && t.flags&staticDialedConn != 0 {
 			if t.resolve(d) {
 				t.dial(d, t.dest)
@@ -520,6 +541,7 @@ func (t *dialTask) resolve(d *dialScheduler) bool {
 }
 
 // dial performs the actual connection attempt.
+// 尝试连接
 func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 	fd, err := d.dialer.Dial(d.ctx, t.dest)
 	if err != nil {
@@ -527,6 +549,9 @@ func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 		return &dialError{err}
 	}
 	mfd := newMeteredConn(fd, false, &net.TCPAddr{IP: dest.IP(), Port: dest.TCP()})
+
+	// metrics监控
+	// p2p/server.go:SetupConn
 	return d.setupFunc(mfd, t.flags, dest)
 }
 

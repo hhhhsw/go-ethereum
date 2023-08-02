@@ -223,6 +223,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
+		// 是否为合约
 		code := evm.StateDB.GetCode(addr)
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged

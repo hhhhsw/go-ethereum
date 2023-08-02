@@ -16,6 +16,7 @@
 
 package graphql
 
+// graphql.schema
 const schema string = `
     # Bytes32 is a 32 byte binary string, represented as 0x-prefixed hexadecimal.
     scalar Bytes32

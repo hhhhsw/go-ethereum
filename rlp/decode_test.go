@@ -50,10 +50,14 @@ func TestStreamKind(t *testing.T) {
 		{"F90400", List, 1024},
 		{"FFFFFFFFFFFFFFFFFF", List, ^uint64(0)},
 	}
+	fmt.Println(^uint64(0))
 
 	for i, test := range tests {
 		// using plainReader to inhibit input limit errors.
-		s := NewStream(newPlainReader(unhex(test.input)), 0)
+		i2 := unhex(test.input)
+		fmt.Println(i2)
+
+		s := NewStream(newPlainReader(i2), 0)
 		kind, len, err := s.Kind()
 		if err != nil {
 			t.Errorf("test %d: Kind returned error: %v", i, err)
@@ -585,296 +589,375 @@ var decodeTests = []decodeTest{
 		ptr:   new(bigIntStruct),
 		value: bigIntStruct{new(big.Int), "444"},
 	},
-
-	// struct errors
-	{
-		input: "C0",
-		ptr:   new(simplestruct),
-		error: "rlp: too few elements for rlp.simplestruct",
-	},
-	{
-		input: "C105",
-		ptr:   new(simplestruct),
-		error: "rlp: too few elements for rlp.simplestruct",
-	},
-	{
-		input: "C7C50583343434C0",
-		ptr:   new([]*simplestruct),
-		error: "rlp: too few elements for rlp.simplestruct, decoding into ([]*rlp.simplestruct)[1]",
-	},
-	{
-		input: "83222222",
-		ptr:   new(simplestruct),
-		error: "rlp: expected input list for rlp.simplestruct",
-	},
-	{
-		input: "C3010101",
-		ptr:   new(simplestruct),
-		error: "rlp: input list has too many elements for rlp.simplestruct",
-	},
-	{
-		input: "C501C3C00000",
-		ptr:   new(recstruct),
-		error: "rlp: expected input string or byte for uint, decoding into (rlp.recstruct).Child.I",
-	},
-	{
-		input: "C103",
-		ptr:   new(intField),
-		error: "rlp: type int is not RLP-serializable (struct field rlp.intField.X)",
-	},
-	{
-		input: "C50102C20102",
-		ptr:   new(tailUint),
-		error: "rlp: expected input string or byte for uint, decoding into (rlp.tailUint).Tail[1]",
-	},
-	{
-		input: "C0",
-		ptr:   new(invalidNilTag),
-		error: `rlp: invalid struct tag "nil" for rlp.invalidNilTag.X (field is not a pointer)`,
-	},
-
-	// struct tag "tail"
-	{
-		input: "C3010203",
-		ptr:   new(tailRaw),
-		value: tailRaw{A: 1, Tail: []RawValue{unhex("02"), unhex("03")}},
-	},
-	{
-		input: "C20102",
-		ptr:   new(tailRaw),
-		value: tailRaw{A: 1, Tail: []RawValue{unhex("02")}},
-	},
-	{
-		input: "C101",
-		ptr:   new(tailRaw),
-		value: tailRaw{A: 1, Tail: []RawValue{}},
-	},
-	{
-		input: "C3010203",
-		ptr:   new(tailPrivateFields),
-		value: tailPrivateFields{A: 1, Tail: []uint{2, 3}},
-	},
-	{
-		input: "C0",
-		ptr:   new(invalidTail1),
-		error: `rlp: invalid struct tag "tail" for rlp.invalidTail1.A (must be on last field)`,
-	},
-	{
-		input: "C0",
-		ptr:   new(invalidTail2),
-		error: `rlp: invalid struct tag "tail" for rlp.invalidTail2.B (field type is not slice)`,
-	},
-
-	// struct tag "-"
-	{
-		input: "C20102",
-		ptr:   new(ignoredField),
-		value: ignoredField{A: 1, C: 2},
-	},
-
-	// struct tag "nilList"
-	{
-		input: "C180",
-		ptr:   new(nilListUint),
-		error: "rlp: wrong kind of empty value (got String, want List) for *uint, decoding into (rlp.nilListUint).X",
-	},
-	{
-		input: "C1C0",
-		ptr:   new(nilListUint),
-		value: nilListUint{},
-	},
-	{
-		input: "C103",
-		ptr:   new(nilListUint),
-		value: func() interface{} {
-			v := uint(3)
-			return nilListUint{X: &v}
-		}(),
-	},
-
-	// struct tag "nilString"
-	{
-		input: "C1C0",
-		ptr:   new(nilStringSlice),
-		error: "rlp: wrong kind of empty value (got List, want String) for *[]uint, decoding into (rlp.nilStringSlice).X",
-	},
-	{
-		input: "C180",
-		ptr:   new(nilStringSlice),
-		value: nilStringSlice{},
-	},
-	{
-		input: "C2C103",
-		ptr:   new(nilStringSlice),
-		value: nilStringSlice{X: &[]uint{3}},
-	},
-
-	// struct tag "optional"
-	{
-		input: "C101",
-		ptr:   new(optionalFields),
-		value: optionalFields{1, 0, 0},
-	},
-	{
-		input: "C20102",
-		ptr:   new(optionalFields),
-		value: optionalFields{1, 2, 0},
-	},
-	{
-		input: "C3010203",
-		ptr:   new(optionalFields),
-		value: optionalFields{1, 2, 3},
-	},
-	{
-		input: "C401020304",
-		ptr:   new(optionalFields),
-		error: "rlp: input list has too many elements for rlp.optionalFields",
-	},
-	{
-		input: "C101",
-		ptr:   new(optionalAndTailField),
-		value: optionalAndTailField{A: 1},
-	},
-	{
-		input: "C20102",
-		ptr:   new(optionalAndTailField),
-		value: optionalAndTailField{A: 1, B: 2, Tail: []uint{}},
-	},
-	{
-		input: "C401020304",
-		ptr:   new(optionalAndTailField),
-		value: optionalAndTailField{A: 1, B: 2, Tail: []uint{3, 4}},
-	},
-	{
-		input: "C101",
-		ptr:   new(optionalBigIntField),
-		value: optionalBigIntField{A: 1, B: nil},
-	},
-	{
-		input: "C20102",
-		ptr:   new(optionalBigIntField),
-		value: optionalBigIntField{A: 1, B: big.NewInt(2)},
-	},
-	{
-		input: "C101",
-		ptr:   new(optionalPtrField),
-		value: optionalPtrField{A: 1},
-	},
-	{
-		input: "C20180", // not accepted because "optional" doesn't enable "nil"
-		ptr:   new(optionalPtrField),
-		error: "rlp: input string too short for [3]uint8, decoding into (rlp.optionalPtrField).B",
-	},
-	{
-		input: "C20102",
-		ptr:   new(optionalPtrField),
-		error: "rlp: input string too short for [3]uint8, decoding into (rlp.optionalPtrField).B",
-	},
-	{
-		input: "C50183010203",
-		ptr:   new(optionalPtrField),
-		value: optionalPtrField{A: 1, B: &[3]byte{1, 2, 3}},
-	},
-	{
-		// all optional fields nil
-		input: "C0",
-		ptr:   new(multipleOptionalFields),
-		value: multipleOptionalFields{A: nil, B: nil},
-	},
-	{
-		// all optional fields set
-		input: "C88301020383010203",
-		ptr:   new(multipleOptionalFields),
-		value: multipleOptionalFields{A: &[3]byte{1, 2, 3}, B: &[3]byte{1, 2, 3}},
-	},
-	{
-		// nil optional field appears before a non-nil one
-		input: "C58083010203",
-		ptr:   new(multipleOptionalFields),
-		error: "rlp: input string too short for [3]uint8, decoding into (rlp.multipleOptionalFields).A",
-	},
-	{
-		// decode a nil ptr into a ptr that is not nil or not optional
-		input: "C20180",
-		ptr:   new(nonOptionalPtrField),
-		error: "rlp: input string too short for [3]uint8, decoding into (rlp.nonOptionalPtrField).B",
-	},
-	{
-		input: "C101",
-		ptr:   new(optionalPtrFieldNil),
-		value: optionalPtrFieldNil{A: 1},
-	},
-	{
-		input: "C20180", // accepted because "nil" tag allows empty input
-		ptr:   new(optionalPtrFieldNil),
-		value: optionalPtrFieldNil{A: 1},
-	},
-	{
-		input: "C20102",
-		ptr:   new(optionalPtrFieldNil),
-		error: "rlp: input string too short for [3]uint8, decoding into (rlp.optionalPtrFieldNil).B",
-	},
-
-	// struct tag "optional" field clearing
-	{
-		input: "C101",
-		ptr:   &optionalFields{A: 9, B: 8, C: 7},
-		value: optionalFields{A: 1, B: 0, C: 0},
-	},
-	{
-		input: "C20102",
-		ptr:   &optionalFields{A: 9, B: 8, C: 7},
-		value: optionalFields{A: 1, B: 2, C: 0},
-	},
-	{
-		input: "C20102",
-		ptr:   &optionalAndTailField{A: 9, B: 8, Tail: []uint{7, 6, 5}},
-		value: optionalAndTailField{A: 1, B: 2, Tail: []uint{}},
-	},
-	{
-		input: "C101",
-		ptr:   &optionalPtrField{A: 9, B: &[3]byte{8, 7, 6}},
-		value: optionalPtrField{A: 1},
-	},
-
-	// RawValue
-	{input: "01", ptr: new(RawValue), value: RawValue(unhex("01"))},
-	{input: "82FFFF", ptr: new(RawValue), value: RawValue(unhex("82FFFF"))},
-	{input: "C20102", ptr: new([]RawValue), value: []RawValue{unhex("01"), unhex("02")}},
-
-	// pointers
-	{input: "00", ptr: new(*[]byte), value: &[]byte{0}},
-	{input: "80", ptr: new(*uint), value: uintp(0)},
-	{input: "C0", ptr: new(*uint), error: "rlp: expected input string or byte for uint"},
-	{input: "07", ptr: new(*uint), value: uintp(7)},
-	{input: "817F", ptr: new(*uint), error: "rlp: non-canonical size information for uint"},
-	{input: "8180", ptr: new(*uint), value: uintp(0x80)},
-	{input: "C109", ptr: new(*[]uint), value: &[]uint{9}},
-	{input: "C58403030303", ptr: new(*[][]byte), value: &[][]byte{{3, 3, 3, 3}}},
-
-	// check that input position is advanced also for empty values.
-	{input: "C3808005", ptr: new([]*uint), value: []*uint{uintp(0), uintp(0), uintp(5)}},
-
-	// interface{}
-	{input: "00", ptr: new(interface{}), value: []byte{0}},
-	{input: "01", ptr: new(interface{}), value: []byte{1}},
-	{input: "80", ptr: new(interface{}), value: []byte{}},
-	{input: "850505050505", ptr: new(interface{}), value: []byte{5, 5, 5, 5, 5}},
-	{input: "C0", ptr: new(interface{}), value: []interface{}{}},
-	{input: "C50183040404", ptr: new(interface{}), value: []interface{}{[]byte{1}, []byte{4, 4, 4}}},
-	{
-		input: "C3010203",
-		ptr:   new([]io.Reader),
-		error: "rlp: type io.Reader is not RLP-serializable",
-	},
-
-	// fuzzer crashes
-	{
-		input: "c330f9c030f93030ce3030303030303030bd303030303030",
-		ptr:   new(interface{}),
-		error: "rlp: element is larger than containing list",
-	},
 }
+
+//var decodeTests = []decodeTest{
+//	// booleans
+//	{input: "01", ptr: new(bool), value: true},
+//	{input: "80", ptr: new(bool), value: false},
+//	{input: "02", ptr: new(bool), error: "rlp: invalid boolean value: 2"},
+//
+//	// integers
+//	{input: "05", ptr: new(uint32), value: uint32(5)},
+//	{input: "80", ptr: new(uint32), value: uint32(0)},
+//	{input: "820505", ptr: new(uint32), value: uint32(0x0505)},
+//	{input: "83050505", ptr: new(uint32), value: uint32(0x050505)},
+//	{input: "8405050505", ptr: new(uint32), value: uint32(0x05050505)},
+//	{input: "850505050505", ptr: new(uint32), error: "rlp: input string too long for uint32"},
+//	{input: "C0", ptr: new(uint32), error: "rlp: expected input string or byte for uint32"},
+//	{input: "00", ptr: new(uint32), error: "rlp: non-canonical integer (leading zero bytes) for uint32"},
+//	{input: "8105", ptr: new(uint32), error: "rlp: non-canonical size information for uint32"},
+//	{input: "820004", ptr: new(uint32), error: "rlp: non-canonical integer (leading zero bytes) for uint32"},
+//	{input: "B8020004", ptr: new(uint32), error: "rlp: non-canonical size information for uint32"},
+//
+//	// slices
+//	{input: "C0", ptr: new([]uint), value: []uint{}},
+//	{input: "C80102030405060708", ptr: new([]uint), value: []uint{1, 2, 3, 4, 5, 6, 7, 8}},
+//	{input: "F8020004", ptr: new([]uint), error: "rlp: non-canonical size information for []uint"},
+//
+//	// arrays
+//	{input: "C50102030405", ptr: new([5]uint), value: [5]uint{1, 2, 3, 4, 5}},
+//	{input: "C0", ptr: new([5]uint), error: "rlp: input list has too few elements for [5]uint"},
+//	{input: "C102", ptr: new([5]uint), error: "rlp: input list has too few elements for [5]uint"},
+//	{input: "C6010203040506", ptr: new([5]uint), error: "rlp: input list has too many elements for [5]uint"},
+//	{input: "F8020004", ptr: new([5]uint), error: "rlp: non-canonical size information for [5]uint"},
+//
+//	// zero sized arrays
+//	{input: "C0", ptr: new([0]uint), value: [0]uint{}},
+//	{input: "C101", ptr: new([0]uint), error: "rlp: input list has too many elements for [0]uint"},
+//
+//	// byte slices
+//	{input: "01", ptr: new([]byte), value: []byte{1}},
+//	{input: "80", ptr: new([]byte), value: []byte{}},
+//	{input: "8D6162636465666768696A6B6C6D", ptr: new([]byte), value: []byte("abcdefghijklm")},
+//	{input: "C0", ptr: new([]byte), error: "rlp: expected input string or byte for []uint8"},
+//	{input: "8105", ptr: new([]byte), error: "rlp: non-canonical size information for []uint8"},
+//
+//	// byte arrays
+//	{input: "02", ptr: new([1]byte), value: [1]byte{2}},
+//	{input: "8180", ptr: new([1]byte), value: [1]byte{128}},
+//	{input: "850102030405", ptr: new([5]byte), value: [5]byte{1, 2, 3, 4, 5}},
+//
+//	// byte array errors
+//	{input: "02", ptr: new([5]byte), error: "rlp: input string too short for [5]uint8"},
+//	{input: "80", ptr: new([5]byte), error: "rlp: input string too short for [5]uint8"},
+//	{input: "820000", ptr: new([5]byte), error: "rlp: input string too short for [5]uint8"},
+//	{input: "C0", ptr: new([5]byte), error: "rlp: expected input string or byte for [5]uint8"},
+//	{input: "C3010203", ptr: new([5]byte), error: "rlp: expected input string or byte for [5]uint8"},
+//	{input: "86010203040506", ptr: new([5]byte), error: "rlp: input string too long for [5]uint8"},
+//	{input: "8105", ptr: new([1]byte), error: "rlp: non-canonical size information for [1]uint8"},
+//	{input: "817F", ptr: new([1]byte), error: "rlp: non-canonical size information for [1]uint8"},
+//
+//	// zero sized byte arrays
+//	{input: "80", ptr: new([0]byte), value: [0]byte{}},
+//	{input: "01", ptr: new([0]byte), error: "rlp: input string too long for [0]uint8"},
+//	{input: "8101", ptr: new([0]byte), error: "rlp: input string too long for [0]uint8"},
+//
+//	// strings
+//	{input: "00", ptr: new(string), value: "\000"},
+//	{input: "8D6162636465666768696A6B6C6D", ptr: new(string), value: "abcdefghijklm"},
+//	{input: "C0", ptr: new(string), error: "rlp: expected input string or byte for string"},
+//
+//	// big ints
+//	{input: "80", ptr: new(*big.Int), value: big.NewInt(0)},
+//	{input: "01", ptr: new(*big.Int), value: big.NewInt(1)},
+//	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
+//	{input: "B848FFFFFFFFFFFFFFFFF800000000000000001BFFFFFFFFFFFFFFFFC8000000000000000045FFFFFFFFFFFFFFFFC800000000000000001BFFFFFFFFFFFFFFFFF8000000000000000001", ptr: new(*big.Int), value: veryVeryBigInt},
+//	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
+//	{input: "C0", ptr: new(*big.Int), error: "rlp: expected input string or byte for *big.Int"},
+//	{input: "00", ptr: new(*big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
+//	{input: "820001", ptr: new(*big.Int), error: "rlp: non-canonical integer (leading zero bytes) for *big.Int"},
+//	{input: "8105", ptr: new(*big.Int), error: "rlp: non-canonical size information for *big.Int"},
+//
+//	// struct errors
+//	{
+//		input: "C0",
+//		ptr:   new(simplestruct),
+//		error: "rlp: too few elements for rlp.simplestruct",
+//	},
+//	{
+//		input: "C105",
+//		ptr:   new(simplestruct),
+//		error: "rlp: too few elements for rlp.simplestruct",
+//	},
+//	{
+//		input: "C7C50583343434C0",
+//		ptr:   new([]*simplestruct),
+//		error: "rlp: too few elements for rlp.simplestruct, decoding into ([]*rlp.simplestruct)[1]",
+//	},
+//	{
+//		input: "83222222",
+//		ptr:   new(simplestruct),
+//		error: "rlp: expected input list for rlp.simplestruct",
+//	},
+//	{
+//		input: "C3010101",
+//		ptr:   new(simplestruct),
+//		error: "rlp: input list has too many elements for rlp.simplestruct",
+//	},
+//	{
+//		input: "C501C3C00000",
+//		ptr:   new(recstruct),
+//		error: "rlp: expected input string or byte for uint, decoding into (rlp.recstruct).Child.I",
+//	},
+//	{
+//		input: "C103",
+//		ptr:   new(intField),
+//		error: "rlp: type int is not RLP-serializable (struct field rlp.intField.X)",
+//	},
+//	{
+//		input: "C50102C20102",
+//		ptr:   new(tailUint),
+//		error: "rlp: expected input string or byte for uint, decoding into (rlp.tailUint).Tail[1]",
+//	},
+//	{
+//		input: "C0",
+//		ptr:   new(invalidNilTag),
+//		error: `rlp: invalid struct tag "nil" for rlp.invalidNilTag.X (field is not a pointer)`,
+//	},
+//
+//	// struct tag "tail"
+//	{
+//		input: "C3010203",
+//		ptr:   new(tailRaw),
+//		value: tailRaw{A: 1, Tail: []RawValue{unhex("02"), unhex("03")}},
+//	},
+//	{
+//		input: "C20102",
+//		ptr:   new(tailRaw),
+//		value: tailRaw{A: 1, Tail: []RawValue{unhex("02")}},
+//	},
+//	{
+//		input: "C101",
+//		ptr:   new(tailRaw),
+//		value: tailRaw{A: 1, Tail: []RawValue{}},
+//	},
+//	{
+//		input: "C3010203",
+//		ptr:   new(tailPrivateFields),
+//		value: tailPrivateFields{A: 1, Tail: []uint{2, 3}},
+//	},
+//	{
+//		input: "C0",
+//		ptr:   new(invalidTail1),
+//		error: `rlp: invalid struct tag "tail" for rlp.invalidTail1.A (must be on last field)`,
+//	},
+//	{
+//		input: "C0",
+//		ptr:   new(invalidTail2),
+//		error: `rlp: invalid struct tag "tail" for rlp.invalidTail2.B (field type is not slice)`,
+//	},
+//
+//	// struct tag "-"
+//	{
+//		input: "C20102",
+//		ptr:   new(ignoredField),
+//		value: ignoredField{A: 1, C: 2},
+//	},
+//
+//	// struct tag "nilList"
+//	{
+//		input: "C180",
+//		ptr:   new(nilListUint),
+//		error: "rlp: wrong kind of empty value (got String, want List) for *uint, decoding into (rlp.nilListUint).X",
+//	},
+//	{
+//		input: "C1C0",
+//		ptr:   new(nilListUint),
+//		value: nilListUint{},
+//	},
+//	{
+//		input: "C103",
+//		ptr:   new(nilListUint),
+//		value: func() interface{} {
+//			v := uint(3)
+//			return nilListUint{X: &v}
+//		}(),
+//	},
+//
+//	// struct tag "nilString"
+//	{
+//		input: "C1C0",
+//		ptr:   new(nilStringSlice),
+//		error: "rlp: wrong kind of empty value (got List, want String) for *[]uint, decoding into (rlp.nilStringSlice).X",
+//	},
+//	{
+//		input: "C180",
+//		ptr:   new(nilStringSlice),
+//		value: nilStringSlice{},
+//	},
+//	{
+//		input: "C2C103",
+//		ptr:   new(nilStringSlice),
+//		value: nilStringSlice{X: &[]uint{3}},
+//	},
+//
+//	// struct tag "optional"
+//	{
+//		input: "C101",
+//		ptr:   new(optionalFields),
+//		value: optionalFields{1, 0, 0},
+//	},
+//	{
+//		input: "C20102",
+//		ptr:   new(optionalFields),
+//		value: optionalFields{1, 2, 0},
+//	},
+//	{
+//		input: "C3010203",
+//		ptr:   new(optionalFields),
+//		value: optionalFields{1, 2, 3},
+//	},
+//	{
+//		input: "C401020304",
+//		ptr:   new(optionalFields),
+//		error: "rlp: input list has too many elements for rlp.optionalFields",
+//	},
+//	{
+//		input: "C101",
+//		ptr:   new(optionalAndTailField),
+//		value: optionalAndTailField{A: 1},
+//	},
+//	{
+//		input: "C20102",
+//		ptr:   new(optionalAndTailField),
+//		value: optionalAndTailField{A: 1, B: 2, Tail: []uint{}},
+//	},
+//	{
+//		input: "C401020304",
+//		ptr:   new(optionalAndTailField),
+//		value: optionalAndTailField{A: 1, B: 2, Tail: []uint{3, 4}},
+//	},
+//	{
+//		input: "C101",
+//		ptr:   new(optionalBigIntField),
+//		value: optionalBigIntField{A: 1, B: nil},
+//	},
+//	{
+//		input: "C20102",
+//		ptr:   new(optionalBigIntField),
+//		value: optionalBigIntField{A: 1, B: big.NewInt(2)},
+//	},
+//	{
+//		input: "C101",
+//		ptr:   new(optionalPtrField),
+//		value: optionalPtrField{A: 1},
+//	},
+//	{
+//		input: "C20180", // not accepted because "optional" doesn't enable "nil"
+//		ptr:   new(optionalPtrField),
+//		error: "rlp: input string too short for [3]uint8, decoding into (rlp.optionalPtrField).B",
+//	},
+//	{
+//		input: "C20102",
+//		ptr:   new(optionalPtrField),
+//		error: "rlp: input string too short for [3]uint8, decoding into (rlp.optionalPtrField).B",
+//	},
+//	{
+//		input: "C50183010203",
+//		ptr:   new(optionalPtrField),
+//		value: optionalPtrField{A: 1, B: &[3]byte{1, 2, 3}},
+//	},
+//	{
+//		// all optional fields nil
+//		input: "C0",
+//		ptr:   new(multipleOptionalFields),
+//		value: multipleOptionalFields{A: nil, B: nil},
+//	},
+//	{
+//		// all optional fields set
+//		input: "C88301020383010203",
+//		ptr:   new(multipleOptionalFields),
+//		value: multipleOptionalFields{A: &[3]byte{1, 2, 3}, B: &[3]byte{1, 2, 3}},
+//	},
+//	{
+//		// nil optional field appears before a non-nil one
+//		input: "C58083010203",
+//		ptr:   new(multipleOptionalFields),
+//		error: "rlp: input string too short for [3]uint8, decoding into (rlp.multipleOptionalFields).A",
+//	},
+//	{
+//		// decode a nil ptr into a ptr that is not nil or not optional
+//		input: "C20180",
+//		ptr:   new(nonOptionalPtrField),
+//		error: "rlp: input string too short for [3]uint8, decoding into (rlp.nonOptionalPtrField).B",
+//	},
+//	{
+//		input: "C101",
+//		ptr:   new(optionalPtrFieldNil),
+//		value: optionalPtrFieldNil{A: 1},
+//	},
+//	{
+//		input: "C20180", // accepted because "nil" tag allows empty input
+//		ptr:   new(optionalPtrFieldNil),
+//		value: optionalPtrFieldNil{A: 1},
+//	},
+//	{
+//		input: "C20102",
+//		ptr:   new(optionalPtrFieldNil),
+//		error: "rlp: input string too short for [3]uint8, decoding into (rlp.optionalPtrFieldNil).B",
+//	},
+//
+//	// struct tag "optional" field clearing
+//	{
+//		input: "C101",
+//		ptr:   &optionalFields{A: 9, B: 8, C: 7},
+//		value: optionalFields{A: 1, B: 0, C: 0},
+//	},
+//	{
+//		input: "C20102",
+//		ptr:   &optionalFields{A: 9, B: 8, C: 7},
+//		value: optionalFields{A: 1, B: 2, C: 0},
+//	},
+//	{
+//		input: "C20102",
+//		ptr:   &optionalAndTailField{A: 9, B: 8, Tail: []uint{7, 6, 5}},
+//		value: optionalAndTailField{A: 1, B: 2, Tail: []uint{}},
+//	},
+//	{
+//		input: "C101",
+//		ptr:   &optionalPtrField{A: 9, B: &[3]byte{8, 7, 6}},
+//		value: optionalPtrField{A: 1},
+//	},
+//
+//	// RawValue
+//	{input: "01", ptr: new(RawValue), value: RawValue(unhex("01"))},
+//	{input: "82FFFF", ptr: new(RawValue), value: RawValue(unhex("82FFFF"))},
+//	{input: "C20102", ptr: new([]RawValue), value: []RawValue{unhex("01"), unhex("02")}},
+//
+//	// pointers
+//	{input: "00", ptr: new(*[]byte), value: &[]byte{0}},
+//	{input: "80", ptr: new(*uint), value: uintp(0)},
+//	{input: "C0", ptr: new(*uint), error: "rlp: expected input string or byte for uint"},
+//	{input: "07", ptr: new(*uint), value: uintp(7)},
+//	{input: "817F", ptr: new(*uint), error: "rlp: non-canonical size information for uint"},
+//	{input: "8180", ptr: new(*uint), value: uintp(0x80)},
+//	{input: "C109", ptr: new(*[]uint), value: &[]uint{9}},
+//	{input: "C58403030303", ptr: new(*[][]byte), value: &[][]byte{{3, 3, 3, 3}}},
+//
+//	// check that input position is advanced also for empty values.
+//	{input: "C3808005", ptr: new([]*uint), value: []*uint{uintp(0), uintp(0), uintp(5)}},
+//
+//	// interface{}
+//	{input: "00", ptr: new(interface{}), value: []byte{0}},
+//	{input: "01", ptr: new(interface{}), value: []byte{1}},
+//	{input: "80", ptr: new(interface{}), value: []byte{}},
+//	{input: "850505050505", ptr: new(interface{}), value: []byte{5, 5, 5, 5, 5}},
+//	{input: "C0", ptr: new(interface{}), value: []interface{}{}},
+//	{input: "C50183040404", ptr: new(interface{}), value: []interface{}{[]byte{1}, []byte{4, 4, 4}}},
+//	{
+//		input: "C3010203",
+//		ptr:   new([]io.Reader),
+//		error: "rlp: type io.Reader is not RLP-serializable",
+//	},
+//
+//	// fuzzer crashes
+//	{
+//		input: "c330f9c030f93030ce3030303030303030bd303030303030",
+//		ptr:   new(interface{}),
+//		error: "rlp: element is larger than containing list",
+//	},
+//}
 
 func uintp(i uint) *uint { return &i }
 

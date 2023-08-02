@@ -439,6 +439,7 @@ func (c *Client) Notify(ctx context.Context, method string, args ...interface{})
 }
 
 // EthSubscribe registers a subscription under the "eth" namespace.
+// 发起订阅
 func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	return c.Subscribe(ctx, "eth", channel, args...)
 }
@@ -486,6 +487,7 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 
 	// Send the subscription request.
 	// The arrival and validity of the response is signaled on sub.quit.
+	// 发送订阅请求
 	if err := c.send(ctx, op, msg); err != nil {
 		return nil, err
 	}
@@ -511,6 +513,7 @@ func (c *Client) newMessage(method string, paramsIn ...interface{}) (*jsonrpcMes
 func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error {
 	select {
 	case c.reqInit <- op:
+		// 长连接write
 		err := c.write(ctx, msg, false)
 		c.reqSent <- err
 		return err
@@ -568,6 +571,7 @@ func (c *Client) reconnect(ctx context.Context) error {
 // dispatch is the main loop of the client.
 // It sends read messages to waiting calls to Call and BatchCall
 // and subscription notifications to registered subscriptions.
+// 长连接处理 codec的read和write
 func (c *Client) dispatch(codec ServerCodec) {
 	var (
 		lastOp      *requestOp  // tracks last send operation
@@ -593,10 +597,13 @@ func (c *Client) dispatch(codec ServerCodec) {
 			return
 
 		// Read path:
+		// read到请求
 		case op := <-c.readOp:
 			if op.batch {
+				// 批量处理
 				conn.handler.handleBatch(op.msgs)
 			} else {
+				// 单条处理
 				conn.handler.handleMsg(op.msgs[0])
 			}
 

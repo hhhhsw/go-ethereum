@@ -162,6 +162,7 @@ func (db *Database) insert(hash common.Hash, node []byte) {
 
 // Node retrieves an encoded cached trie node from memory. If it cannot be found
 // cached, the method queries the persistent database for the content.
+// 根据 header.Root 获取根节点
 func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// It doesn't make sense to retrieve the metaroot
 	if hash == (common.Hash{}) {

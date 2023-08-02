@@ -302,7 +302,7 @@ func Setup(ctx *cli.Context) error {
 		}
 	}
 
-	// pprof server
+	// pprof server todo  pprof是啥
 	if ctx.Bool(pprofFlag.Name) {
 		listenHost := ctx.String(pprofAddrFlag.Name)
 

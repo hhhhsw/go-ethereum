@@ -118,6 +118,12 @@ func UnmarshalFixedText(typname string, input, out []byte) error {
 			return ErrSyntax
 		}
 	}
+	var ax uint8
+	ax = 255
+	var bx byte
+	bx = 255
+	fmt.Println(ax)
+	fmt.Println(bx)
 	hex.Decode(out, raw)
 	return nil
 }

@@ -75,6 +75,7 @@ func (t *Trie) Copy() *Trie {
 // empty, otherwise, the root node must be present in database or returns
 // a MissingNodeError if not.
 func New(id *ID, db NodeReader) (*Trie, error) {
+	// reader 中已经包含了 stateRoot 关联 Node 的信息
 	reader, err := newTrieReader(id.StateRoot, id.Owner, db)
 	if err != nil {
 		return nil, err

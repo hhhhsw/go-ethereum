@@ -78,6 +78,7 @@ func (s *Server) RegisterName(name string, receiver interface{}) error {
 // server is stopped. In either case the codec is closed.
 //
 // Note that codec options are no longer supported.
+// 于服务端建立长连接
 func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	defer codec.close()
 
@@ -86,6 +87,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	}
 	defer s.untrackCodec(codec)
 
+	// 初始化客户端 接受请求
 	c := initClient(codec, s.idgen, &s.services)
 	<-codec.closed()
 	c.Close()
@@ -112,6 +114,7 @@ func (s *Server) untrackCodec(codec ServerCodec) {
 // serveSingleRequest reads and processes a single RPC request from the given codec. This
 // is used to serve HTTP connections. Subscriptions and reverse calls are not allowed in
 // this mode.
+// 单次请求处理
 func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	// Don't serve if server is stopped.
 	if !s.run.Load() {

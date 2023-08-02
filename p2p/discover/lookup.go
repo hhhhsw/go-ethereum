@@ -28,7 +28,8 @@ import (
 // target by querying nodes that are closer to it on each iteration. The given target does
 // not need to be an actual node identifier.
 type lookup struct {
-	tab         *Table
+	tab *Table
+	// 初始化时注入的查找节点func
 	queryfunc   func(*node) ([]*node, error)
 	replyCh     chan []*node
 	cancelCh    <-chan struct{}
@@ -70,10 +71,12 @@ func (it *lookup) advance() bool {
 	for it.startQueries() {
 		select {
 		case nodes := <-it.replyCh:
+			// 清空 replyBuffer
 			it.replyBuffer = it.replyBuffer[:0]
 			for _, n := range nodes {
 				if n != nil && !it.seen[n.ID()] {
 					it.seen[n.ID()] = true
+					// push node into it.result.entries
 					it.result.push(n, bucketSize)
 					it.replyBuffer = append(it.replyBuffer, n)
 				}
@@ -104,6 +107,7 @@ func (it *lookup) startQueries() bool {
 	}
 
 	// The first query returns nodes from the local table.
+	// 第一次查询 从本地table.bucket中获取节点
 	if it.queries == -1 {
 		closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
 		// Avoid finishing the lookup too quickly if table is empty. It'd be better to wait
